@@ -1,46 +1,41 @@
-# ML Service Dockerfile for Sharks from Space
+# Backend Dockerfile for Sharks from Space
 
-# Use official Python image
-FROM python:3.10-slim
+# Use official Node.js LTS image
+FROM node:18-alpine
 
 # Set working directory
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    libgdal-dev \
-    libspatialindex-dev \
-    git \
-    wget \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++
 
-# Copy requirements file
-COPY requirements.txt .
+# Copy package files
+COPY package*.json ./
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install dependencies
+RUN npm ci --only=production
 
 # Copy application code
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p models satellite_data logs
+# Create uploads directory
+RUN mkdir -p uploads logs
 
-# Download pre-trained model (if available)
-# RUN wget -O models/shark_detection_model.h5 https://your-model-url.com/model.h5
+# Set proper permissions
+RUN chown -R node:node /app
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV TF_CPP_MIN_LOG_LEVEL=2
+# Switch to non-root user
+USER node
 
-# Expose port for ML service API
-EXPOSE 8000
+# Expose port
+EXPOSE 5000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD python -c "import requests; requests.get('http://localhost:8000/health')"
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:5000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-# Start ML service
-CMD ["python", "app.py"]
+# Start application
+CMD ["npm", "start"]
